@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Orbit Turn Type Quick Fill
 // @namespace    https://amazon.com
-// @version      1.6
+// @version      1.7
 // @description  Floating panel: N/A Fill / HE Cannot Judge / Conclude Chat auto-fill for Orbit annotation forms
 // @match        https://orbit-gamma.beta.harmony.a2z.com/*
 // @match        https://orbit-beta.harmony.a2z.com/*
@@ -271,20 +271,20 @@
     } finally { _running = false; }
   }
 
-  async function applyHECannotJudge() {
+  // Shared HE Cannot Judge filler.
+  // negFeedbackNA = true  -> ENCT: Negative Customer Feedback Classification = N/A
+  // negFeedbackNA = false -> NCT : every field = Human Evaluator
+  async function applyHE(negFeedbackNA, toastMsg) {
     if (_running) return;
     _running = true;
     try {
       const HE = 'Human Evaluator - Cannot Judge';
 
-      // Radio fields — synchronous, instant
       clickRadio('Context Switch Accurate',       HE);
       clickRadio('Conversation Context Accurate', HE);
       clickRadio('Tool Invoked Accurate',          HE);
       clickRadio('Response Content Accurate',      HE);
 
-      // Dropdown fields — sequential; trigger found once and passed directly
-      // to avoid a second DOM scan inside selectOption.
       const dropdownFields = [
         'Turn Type Classification',
         'HVA Category',
@@ -297,12 +297,16 @@
       for (const field of dropdownFields) {
         const trigger = findSelectTrigger(field);
         if (!trigger) continue;   // field not on this page
-        await selectOptionWithTrigger(trigger, HE);
+        const isNeg = field === 'Negative Customer Feedback Classification';
+        await selectOptionWithTrigger(trigger, (isNeg && negFeedbackNA) ? 'N/A' : HE);
       }
 
-      showToast('HE Cannot Judge applied ✓', '#c0392b');
+      showToast(toastMsg, '#c0392b');
     } finally { _running = false; }
   }
+
+  function applyHE_ENCT() { return applyHE(true,  'HE Cannot Judge ENCT applied ✓'); }
+  function applyHE_NCT()  { return applyHE(false, 'HE Cannot Judge NCT applied ✓'); }
 
   async function applyConcludeChat() {
     if (_running) return;
@@ -402,7 +406,7 @@
       border: '1px solid #ddd0bc',
       borderRadius: '14px',
       padding: '0',
-      width: '192px',
+      width: '224px',
       boxShadow: '0 6px 24px rgba(120,80,30,0.13), 0 1px 4px rgba(120,80,30,0.08)',
       userSelect: 'none', overflow: 'hidden',
       animation: 'otf-fadein 0.2s ease',
@@ -449,9 +453,10 @@
     Object.assign(body.style, { padding: '8px', display: 'flex', flexDirection: 'column', gap: '3px' });
 
     const BTN_DEFS = [
-      { key: '1', label: 'N/A Fill',        fn: applyNA,            accent: '#2e7d32', bg: 'rgba(46,125,50,0.10)'   },
-      { key: '2', label: 'HE Cannot Judge', fn: applyHECannotJudge, accent: '#c0392b', bg: 'rgba(192,57,43,0.10)'  },
-      { key: '3', label: 'Conclude Chat',   fn: applyConcludeChat, accent: '#8e44ad', bg: 'rgba(142,68,173,0.10)' },
+      { key: '1', label: 'N/A Fill',            fn: applyNA,           accent: '#2e7d32', bg: 'rgba(46,125,50,0.10)'   },
+      { key: '2', label: 'HE Cannot Judge ENCT', fn: applyHE_ENCT,      accent: '#c0392b', bg: 'rgba(192,57,43,0.10)'  },
+      { key: '3', label: 'HE Cannot Judge NCT',  fn: applyHE_NCT,       accent: '#d35400', bg: 'rgba(211,84,0,0.10)'   },
+      { key: '4', label: 'Conclude Chat',        fn: applyConcludeChat, accent: '#8e44ad', bg: 'rgba(142,68,173,0.10)' },
     ];
 
     for (const { key, label, fn, accent, bg } of BTN_DEFS) {
@@ -482,7 +487,7 @@
     body.appendChild(divider);
 
     const hint = document.createElement('div');
-    hint.textContent = 'Keys  1 · 2 · 3';
+    hint.textContent = 'Keys  1 · 2 · 3 · 4';
     Object.assign(hint.style, {
       fontSize: '10px', color: '#b09a82', textAlign: 'center',
       padding: '2px 0 3px', letterSpacing: '0.3px',
@@ -522,8 +527,9 @@
   document.addEventListener('keydown', e => {
     if (['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)) return;
     if (e.key === '1') applyNA();
-    else if (e.key === '2') applyHECannotJudge();
-    else if (e.key === '3') applyConcludeChat();
+    else if (e.key === '2') applyHE_ENCT();
+    else if (e.key === '3') applyHE_NCT();
+    else if (e.key === '4') applyConcludeChat();
   });
 
   // Watch for the annotation panel to appear (SPA navigation), then stop.
